@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QRIS Generator Pro — Statis ke Dinamis & Custom Merchant</title>
+  <meta name="description" content="Ubah QRIS statis menjadi dinamis dengan nominal otomatis, buat QRIS merchant baru, unduh PNG siap cetak, dan bagikan tautan pembayaran." />
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- QRCode Generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- jsQR Image Scanner -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    #qrcode-preview img, #qrcode-preview canvas {
+      margin: 0 auto;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Navbar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center shadow-sm shadow-red-200">
+          <i data-lucide="qr-code" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg text-slate-900 leading-tight">QRIS Generator <span class="text-red-600">Pro</span></h1>
+          <p class="text-xs text-slate-500">EMVCo & Standar BI • 100% Client-Side</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        Aman & Privat (Tanpa Server)
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8">
+    
+    <!-- Banner Shared Link -->
+    <div id="shared-banner" class="hidden mb-6 bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+          <i data-lucide="link" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-indigo-950">Tautan Pembayaran QRIS Dimuat</p>
+          <p class="text-xs text-indigo-700">Data QRIS dan nominal di bawah ini dimuat otomatis dari tautan yang dibagikan.</p>
+        </div>
+      </div>
+      <button onclick="clearUrlParams()" class="text-xs font-semibold text-indigo-700 hover:text-indigo-900 underline shrink-0">
+        Reset Form
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      
+      <!-- Left Column: Controls -->
+      <div class="lg:col-span-7 space-y-6">
+        
+        <!-- Mode Switcher -->
+        <div class="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-2 gap-1.5">
+          <button id="tab-dynamic" onclick="switchMode('dynamic')" class="py-2.5 px-4 rounded-xl text-sm font-semibold transition-all bg-red-600 text-white shadow-sm flex items-center justify-center gap-2">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            Statis ke Dinamis
+          </button>
+          <button id="tab-custom" onclick="switchMode('custom')" class="py-2.5 px-4 rounded-xl text-sm font-semibold transition-all text-slate-600 hover:bg-slate-100 flex items-center justify-center gap-2">
+            <i data-lucide="store" class="w-4 h-4"></i>
+            Buat QRIS Merchant Baru
+          </button>
+        </div>
+
+        <!-- PANEL 1: STATIC TO DYNAMIC -->
+        <div id="panel-dynamic" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">1. Masukkan Data QRIS Statis Anda</h2>
+              <p class="text-xs text-slate-500 mt-0.5">Unggah foto/gambar QRIS toko Anda atau tempel kode string EMVCo.</p>
+            </div>
+            <button onclick="loadSampleQRIS()" class="text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">
+              Gunakan Contoh QRIS
+            </button>
+          </div>
+
+          <!-- Upload Image Dropzone -->
+          <div id="dropzone" onclick="document.getElementById('qr-file-input').click()" class="border-2 border-dashed border-slate-300 hover:border-red-500 bg-slate-50/70 hover:bg-red-50/30 rounded-xl p-5 text-center cursor-pointer transition group">
+            <input type="file" id="qr-file-input" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
+            <div class="w-11 h-11 rounded-full bg-white border border-slate-200 flex items-center justify-center mx-auto mb-2.5 group-hover:scale-105 transition shadow-sm">
+              <i data-lucide="image-plus" class="w-5 h-5 text-red-600"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-700">Klik atau seret gambar QRIS ke sini</p>
+            <p class="text-xs text-slate-400 mt-1">Mendukung JPG, PNG, WEBP (Diproses lokal di browser)</p>
+            <p id="scan-status" class="text-xs font-medium mt-2 hidden"></p>
+          </div>
+
+          <!-- Raw Payload Input -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Atau Tempel Payload QRIS String</label>
+            <textarea id="raw-qris-input" rows="3" oninput="generateDynamicQRIS()" placeholder="00020101021126570011ID.DANA.WWW0118936009153000000000..." class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+          </div>
+
+          <hr class="border-slate-100" />
+
+          <!-- Nominal & Fee -->
+          <div class="space-y-4">
+            <h2 class="text-base font-bold text-slate-900">2. Atur Nominal & Biaya Layanan</h2>
+            
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nominal Pembayaran (IDR)</label>
+              <div class="relative">
+                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">Rp</span>
+                <input type="text" id="amount-input" oninput="formatAmountInput(this); generateDynamicQRIS()" placeholder="0" class="w-full rounded-xl border border-slate-300 pl-10 pr-4 py-3 text-lg font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500" />
+              </div>
+              <!-- Quick Amounts -->
+              <div class="flex flex-wrap gap-2 mt-2.5">
+                <button type="button" onclick="setQuickAmount(10000)" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">+10.000</button>
+                <button type="button" onclick="setQuickAmount(25000)" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">+25.000</button>
+                <button type="button" onclick="setQuickAmount(50000)" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">+50.000</button>
+                <button type="button" onclick="setQuickAmount(100000)" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">+100.000</button>
+                <button type="button" onclick="setQuickAmount(0)" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition">Hapus</button>
+              </div>
+            </div>
+
+            <!-- Service Fee / Tip Option -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">Tipe Biaya Layanan / Tip (Tag 55)</label>
+                <select id="fee-type" onchange="toggleFeeInput(); generateDynamicQRIS()" class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500">
+                  <option value="none">Tidak Ada Biaya Tambahan</option>
+                  <option value="fixed">Biaya Tetap (Rupiah - Tag 56)</option>
+                  <option value="percent">Persentase (% - Tag 57)</option>
+                </select>
+              </div>
+              <div id="fee-value-container" class="hidden">
+                <label id="fee-value-label" class="block text-xs font-semibold text-slate-700 mb-1.5">Nilai Biaya</label>
+                <input type="number" id="fee-value" oninput="generateDynamicQRIS()" placeholder="Contoh: 2000" class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 2: CUSTOM MERCHANT BUILDER -->
+        <div id="panel-custom" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Buat Struktur QRIS Baru (EMVCo Builder)</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Menyusun payload standar Bank Indonesia lengkap dengan checksum CRC-16 otomatis.</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Merchant / Toko (Tag 59)</label>
+              <input type="text" id="custom-name" value="KOPI NUSANTARA" maxlength="25" oninput="generateCustomQRIS()" class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm uppercase font-semibold focus:ring-2 focus:ring-red-500 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Kota Merchant (Tag 60)</label>
+              <input type="text" id="custom-city" value="JAKARTA SELATAN" maxlength="15" oninput="generateCustomQRIS()" class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm uppercase font-semibold focus:ring-2 focus:ring-red-500 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Pos (Tag 61)</label>
+              <input type="text" id="custom-zip" value="12190" maxlength="10" oninput="generateCustomQRIS()" class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Kriteria Usaha (Tag 51.03)</label>
+              <select id="custom-criteria" onchange="generateCustomQRIS()" class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none">
+                <option value="UMI">UMI (Usaha Mikro)</option>
+                <option value="UKE">UKE (Usaha Kecil)</option>
+                <option value="UME">UME (Usaha Menengah)</option>
+                <option value="UBE">UBE (Usaha Besar)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">NMID (National Merchant ID)</label>
+              <input type="text" id="custom-nmid" value="ID1020030040050" maxlength="19" oninput="generateCustomQRIS()" class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Nominal Opsional (Rp)</label>
+              <input type="number" id="custom-amount" placeholder="Kosongkan jika statis" oninput="generateCustomQRIS()" class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm font-semibold focus:ring-2 focus:ring-red-500 focus:outline-none" />
+            </div>
+          </div>
+        </div>
+
+        <!-- EMVCo TLV Inspector -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <button onclick="toggleInspector()" class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition">
+            <div class="flex items-center gap-2.5">
+              <i data-lucide="code-2" class="w-4 h-4 text-slate-500"></i>
+              <span class="text-sm font-bold text-slate-800">Inspektor Struktur Tag EMVCo (TLV)</span>
+            </div>
+            <i id="inspector-chevron" data-lucide="chevron-down" class="w-4 h-4 text-slate-500 transition-transform"></i>
+          </button>
+          <div id="inspector-body" class="hidden border-t border-slate-100 px-6 py-4 bg-slate-50/50">
+            <div id="tlv-list" class="space-y-1.5 text-xs font-mono">
+              <p class="text-slate-400 italic">Belum ada payload QRIS aktif.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: QRIS Card Preview -->
+      <div class="lg:col-span-5 lg:sticky lg:top-24 space-y-4">
+        
+        <!-- Printable QRIS Card -->
+        <div id="qris-card-container" class="bg-white rounded-3xl border border-slate-200 shadow-lg overflow-hidden">
+          <!-- Top Red Accent -->
+          <div class="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 text-white flex items-center justify-between">
+            <div>
+              <span class="text-[10px] uppercase tracking-widest font-bold opacity-80 block">Standar Pembayaran Nasional</span>
+              <span class="text-xl font-extrabold tracking-tight">QRIS</span>
+            </div>
+            <span id="badge-type" class="text-xs font-bold px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm">
+              DINAMIS
+            </span>
+          </div>
+
+          <!-- Merchant Info -->
+          <div class="p-6 text-center space-y-4">
+            <div>
+              <h3 id="preview-merchant-name" class="text-lg font-extrabold text-slate-900 uppercase tracking-tight">NAMA MERCHANT</h3>
+              <p id="preview-merchant-city" class="text-xs font-medium text-slate-500 uppercase mt-0.5">KOTA • NMID: -</p>
+            </div>
+
+            <!-- QR Box -->
+            <div class="relative inline-block p-4 bg-white rounded-2xl border-2 border-slate-100 shadow-inner">
+              <div id="qrcode-preview" class="w-[220px] h-[220px] flex items-center justify-center">
+                <div class="text-center text-slate-400 space-y-2">
+                  <i data-lucide="qr-code" class="w-12 h-12 mx-auto opacity-30"></i>
+                  <p class="text-xs">Masukkan QRIS untuk mulai</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Amount Display -->
+            <div id="preview-amount-box" class="bg-slate-50 rounded-2xl p-3.5 border border-slate-200/80">
+              <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Total Pembayaran</span>
+              <span id="preview-amount-text" class="text-2xl font-extrabold text-slate-900 mt-0.5 block">Nominal Bebas (Statis)</span>
+              <span id="preview-fee-text" class="text-xs font-medium text-emerald-600 hidden mt-0.5"></span>
+            </div>
+
+            <!-- Supported Wallets -->
+            <div class="pt-1">
+              <p class="text-[11px] text-slate-400 font-medium">Mendukung scan dari seluruh aplikasi pembayaran:</p>
+              <p class="text-xs font-bold text-slate-600 mt-1">GoPay • OVO • DANA • ShopeePay • LinkAja • BCA • Mandiri • BRI • BNI • SeaBank</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="grid grid-cols-2 gap-3">
+          <button onclick="downloadQRISCard()" class="col-span-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold py-3 px-4 rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            Download Kartu QRIS (PNG)
+          </button>
+          <button onclick="copyPayload()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-2 text-xs">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+            <span id="copy-btn-text">Salin Payload</span>
+          </button>
+          <button onclick="sharePaymentLink()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-2 text-xs">
+            <i data-lucide="share-2" class="w-4 h-4"></i>
+            <span id="share-btn-text">Bagikan Link</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-200 bg-white py-6 mt-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 text-center text-xs text-slate-500">
+      QRIS Generator Pro — Kompatibel dengan GitHub Pages & Standar EMVCo Indonesia. Seluruh pemrosesan dilakukan di perangkat Anda.
+    </div>
+  </footer>
+
+  <!-- Hidden Canvas for High-Res PNG Export -->
+  <canvas id="export-canvas" width="800" height="1040" class="hidden"></canvas>
+
+  <script>
+    lucide.createIcons();
+
+    let currentMode = 'dynamic';
+    let currentFinalPayload = '';
+    let currentMerchantName = 'NAMA MERCHANT';
+    let currentMerchantCity = 'KOTA';
+    let currentNMID = '-';
+    let currentDisplayAmount = 'Nominal Bebas (Statis)';
+    let currentIsDynamic = false;
+
+    // Sample valid static QRIS string
+    const SAMPLE_QRIS = "00020101021126610014COM.GO-JEK.WWW01189360091430000000000210G0000000000303UMI51440014ID.CO.QRIS.WWW0215ID10200300400500303UMI5204581253033605802ID5914WARUNG DIGITAL6013JAKARTA PUSAT6105101106304";
+
+    function calculateCRC16(str) {
+      let crc = 0xFFFF;
+      for (let i = 0; i < str.length; i++) {
+        crc ^= str.charCodeAt(i) << 8;
+        for (let j = 0; j < 8; j++) {
+          if ((crc & 0x8000) !== 0) {
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+          } else {
+            crc = (crc << 1) & 0xFFFF;
+          }
+        }
+      }
+      return crc.toString(16).toUpperCase().padStart(4, '0');
+    }
+
+    function parseTLV(payload) {
+      const tags = [];
+      let i = 0;
+      while (i + 4 <= payload.length) {
+        const tag = payload.substring(i, i + 2);
+        const len = parseInt(payload.substring(i + 2, i + 4), 10);
+        if (isNaN(len) || i + 4 + len > payload.length) break;
+        const val = payload.substring(i + 4, i + 4 + len);
+        tags.push({ tag, len, val });
+        i += 4 + len;
+      }
+      return tags;
+    }
+
+    function buildTLV(tag, value) {
+      const len = value.length.toString().padStart(2, '0');
+      return `${tag}${len}${value}`;
+    }
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const tabDyn = document.getElementById('tab-dynamic');
+      const tabCus = document.getElementById('tab-custom');
+      const panelDyn = document.getElementById('panel-dynamic');
+      const panelCus = document.getElementById('panel-custom');
+
+      if (mode === 'dynamic') {
+        tabDyn.className = "py-2.5 px-4 rounded-xl text-sm font-semibold transition-all bg-red-600 text-white shadow-sm flex items-center justify-center gap-2";
+        tabCus.className = "py-2.5 px-4 rounded-xl text-sm font-semibold transition-all text-slate-600 hover:bg-slate-100 flex items-center justify-center gap-2";
+        panelDyn.classList.remove('hidden');
+        panelCus.classList.add('hidden');
+        generateDynamicQRIS();
+      } else {
+        tabCus.className = "py-2.5 px-4 rounded-xl text-sm font-semibold transition-all bg-red-600 text-white shadow-sm flex items-center justify-center gap-2";
+        tabDyn.className = "py-2.5 px-4 rounded-xl text-sm font-semibold transition-all text-slate-600 hover:bg-slate-100 flex items-center justify-center gap-2";
+        panelCus.classList.remove('hidden');
+        panelDyn.classList.add('hidden');
+        generateCustomQRIS();
+      }
+    }
+
+    function loadSampleQRIS() {
+      const fullSample = SAMPLE_QRIS + calculateCRC16(SAMPLE_QRIS);
+      document.getElementById('raw-qris-input').value = fullSample;
+      document.getElementById('amount-input').value = "25.000";
+      generateDynamicQRIS();
+    }
+
+    function formatAmountInput(el) {
+      let raw = el.value.replace(/\D/g, '');
+      if (!raw) {
+        el.value = '';
+        return;
+      }
+      el.value = parseInt(raw, 10).toLocaleString('id-ID');
+    }
+
+    function getNumericAmount() {
+      const raw = document.getElementById('amount-input').value.replace(/\D/g, '');
+      return raw ? parseInt(raw, 10) : 0;
+    }
+
+    function setQuickAmount(val) {
+      const input = document.getElementById('amount-input');
+      if (val === 0) {
+        input.value = '';
+      } else {
+        const current = getNumericAmount();
+        input.value = (current + val).toLocaleString('id-ID');
+      }
+      generateDynamicQRIS();
+    }
+
+    function toggleFeeInput() {
+      const type = document.getElementById('fee-type').value;
+      const container = document.getElementById('fee-value-container');
+      const label = document.getElementById('fee-value-label');
+      if (type === 'none') {
+        container.classList.add('hidden');
+      } else {
+        container.classList.remove('hidden');
+        label.textContent = type === 'fixed' ? 'Nominal Biaya (Rp)' : 'Persentase Biaya (%)';
+      }
+    }
+
+    function handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const statusEl = document.getElementById('scan-status');
+      statusEl.classList.remove('hidden', 'text-emerald-600', 'text-red-600');
+      statusEl.classList.add('text-slate-600');
+      statusEl.textContent = 'Membaca kode QR dari gambar...';
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+          if (code && code.data) {
+            document.getElementById('raw-qris-input').value = code.data;
+            statusEl.classList.remove('text-slate-600');
+            statusEl.classList.add('text-emerald-600');
+            statusEl.textContent = '✓ QRIS berhasil terbaca dari gambar!';
+            generateDynamicQRIS();
+          } else {
+            statusEl.classList.remove('text-slate-600');
+            statusEl.classList.add('text-red-600');
+            statusEl.textContent = '✕ Kode QR tidak terdeteksi. Pastikan gambar jelas & tidak terpotong.';
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function generateDynamicQRIS() {
+      let raw = document.getElementById('raw-qris-input').value.trim();
+      if (!raw) {
+        resetPreview();
+        return;
+      }
+
+      // Strip existing CRC (6304XXXX) if present
+      if (raw.includes('6304') && raw.length >= 8) {
+        const crcIdx = raw.lastIndexOf('6304');
+        if (crcIdx === raw.length - 8) {
+          raw = raw.substring(0, crcIdx);
+        }
+      }
+
+      const tags = parseTLV(raw);
+      if (tags.length === 0) return;
+
+      const amount = getNumericAmount();
+      const feeType = document.getElementById('fee-type').value;
+      const feeVal = parseFloat(document.getElementById('fee-value').value) || 0;
+
+      let merchantName = 'MERCHANT QRIS';
+      let merchantCity = 'INDONESIA';
+      let nmid = '-';
+
+      const filteredTags = [];
+      for (const item of tags) {
+        if (item.tag === '59') merchantName = item.val;
+        if (item.tag === '60') merchantCity = item.val;
+        if (item.tag === '51') {
+          const subTags = parseTLV(item.val);
+          const nmidSub = subTags.find(s => s.tag === '02');
+          if (nmidSub) nmid = nmidSub.val;
+        }
+
+        // Skip old amount, fee, and CRC tags
+        if (['54', '55', '56', '57', '63'].includes(item.tag)) continue;
+
+        // Update Point of Initiation Method (Tag 01): 11 = Static, 12 = Dynamic
+        if (item.tag === '01') {
+          filteredTags.push(buildTLV('01', amount > 0 ? '12' : '11'));
+        } else {
+          filteredTags.push(buildTLV(item.tag, item.val));
+        }
+      }
+
+      // Insert Tag 54 (Amount) and Fee Tags before Tag 58 (Country Code)
+      const finalTags = [];
+      let insertedAmount = false;
+      for (const tStr of filteredTags) {
+        const tCode = tStr.substring(0, 2);
+        if (parseInt(tCode, 10) > 54 && !insertedAmount) {
+          if (amount > 0) {
+            finalTags.push(buildTLV('54', amount.toString()));
+            if (feeType === 'fixed' && feeVal > 0) {
+              finalTags.push(buildTLV('55', '02'));
+              finalTags.push(buildTLV('56', Math.round(feeVal).toString()));
+            } else if (feeType === 'percent' && feeVal > 0) {
+              finalTags.push(buildTLV('55', '03'));
+              finalTags.push(buildTLV('57', feeVal.toString()));
+            }
+          }
+          insertedAmount = true;
+        }
+        finalTags.push(tStr);
+      }
+
+      const payloadWithoutCRC = finalTags.join('') + '6304';
+      const crc = calculateCRC16(payloadWithoutCRC);
+      const completePayload = payloadWithoutCRC + crc;
+
+      updatePreview(completePayload, merchantName, merchantCity, nmid, amount, feeType, feeVal);
+    }
+
+    function generateCustomQRIS() {
+      const name = (document.getElementById('custom-name').value.trim() || 'MERCHANT').toUpperCase();
+      const city = (document.getElementById('custom-city').value.trim() || 'JAKARTA').toUpperCase();
+      const zip = document.getElementById('custom-zip').value.trim() || '10110';
+      const criteria = document.getElementById('custom-criteria').value;
+      const nmid = (document.getElementById('custom-nmid').value.trim() || 'ID1020030040050').toUpperCase();
+      const amount = parseInt(document.getElementById('custom-amount').value, 10) || 0;
+
+      const tag26 = buildTLV('00', 'ID.CO.QRIS.WWW') + buildTLV('01', '936009143000000000') + buildTLV('02', nmid) + buildTLV('03', criteria);
+      const tag51 = buildTLV('00', 'ID.CO.QRIS.WWW') + buildTLV('02', nmid) + buildTLV('03', criteria);
+
+      let parts = [
+        buildTLV('00', '01'),
+        buildTLV('01', amount > 0 ? '12' : '11'),
+        buildTLV('26', tag26),
+        buildTLV('51', tag51),
+        buildTLV('52', '5999'),
+        buildTLV('53', '360')
+      ];
+
+      if (amount > 0) {
+        parts.push(buildTLV('54', amount.toString()));
+      }
+
+      parts.push(
+        buildTLV('58', 'ID'),
+        buildTLV('59', name),
+        buildTLV('60', city),
+        buildTLV('61', zip)
+      );
+
+      const payloadWithoutCRC = parts.join('') + '6304';
+      const crc = calculateCRC16(payloadWithoutCRC);
+      const completePayload = payloadWithoutCRC + crc;
+
+      updatePreview(completePayload, name, city, nmid, amount, 'none', 0);
+    }
+
+    function updatePreview(payload, name, city, nmid, amount, feeType, feeVal) {
+      currentFinalPayload = payload;
+      currentMerchantName = name;
+      currentMerchantCity = city;
+      currentNMID = nmid;
+      currentIsDynamic = amount > 0;
+
+      document.getElementById('preview-merchant-name').textContent = name;
+      document.getElementById('preview-merchant-city').textContent = `${city} • NMID: ${nmid}`;
+      
+      const badge = document.getElementById('badge-type');
+      badge.textContent = amount > 0 ? 'DINAMIS' : 'STATIS';
+
+      const amountText = document.getElementById('preview-amount-text');
+      const feeText = document.getElementById('preview-fee-text');
+
+      if (amount > 0) {
+        currentDisplayAmount = `Rp ${amount.toLocaleString('id-ID')}`;
+        amountText.textContent = currentDisplayAmount;
+        if (feeType === 'fixed' && feeVal > 0) {
+          feeText.textContent = `+ Biaya Layanan Rp ${Math.round(feeVal).toLocaleString('id-ID')}`;
+          feeText.classList.remove('hidden');
+        } else if (feeType === 'percent' && feeVal > 0) {
+          feeText.textContent = `+ Biaya Layanan ${feeVal}%`;
+          feeText.classList.remove('hidden');
+        } else {
+          feeText.classList.add('hidden');
+        }
+      } else {
+        currentDisplayAmount = 'Nominal Bebas (Statis)';
+        amountText.textContent = currentDisplayAmount;
+        feeText.classList.add('hidden');
+      }
+
+      // Render QR Code
+      const qrContainer = document.getElementById('qrcode-preview');
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, {
+        text: payload,
+        width: 220,
+        height: 220,
+        colorDark: "#0f172a",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      renderTLVInspector(payload);
+    }
+
+    function resetPreview() {
+      currentFinalPayload = '';
+      document.getElementById('preview-merchant-name').textContent = 'NAMA MERCHANT';
+      document.getElementById('preview-merchant-city').textContent = 'KOTA • NMID: -';
+      document.getElementById('preview-amount-text').textContent = 'Nominal Bebas (Statis)';
+      document.getElementById('preview-fee-text').classList.add('hidden');
+      document.getElementById('qrcode-preview').innerHTML = `
+        <div class="text-center text-slate-400 space-y-2">
+          <p class="text-xs">Masukkan QRIS untuk mulai</p>
+        </div>`;
+      document.getElementById('tlv-list').innerHTML = '<p class="text-slate-400 italic">Belum ada payload QRIS aktif.</p>';
+    }
+
+    function renderTLVInspector(payload) {
+      const tags = parseTLV(payload);
+      const tagDescriptions = {
+        '00': 'Payload Format Indicator',
+        '01': 'Point of Initiation (11=Statis, 12=Dinamis)',
+        '26': 'Merchant Account Information (Domestik)',
+        '51': 'Merchant Account Information (QRIS)',
+        '52': 'Merchant Category Code (MCC)',
+        '53': 'Transaction Currency (360 = IDR)',
+        '54': 'Transaction Amount (Nominal)',
+        '55': 'Tip / Convenience Indicator',
+        '56': 'Value of Convenience Fee (Fixed)',
+        '57': 'Value of Convenience Fee (Percentage)',
+        '58': 'Country Code (ID)',
+        '59': 'Merchant Name',
+        '60': 'Merchant City',
+        '61': 'Postal Code',
+        '62': 'Additional Data Field',
+        '63': 'CRC-16 Checksum'
+      };
+
+      const container = document.getElementById('tlv-list');
+      container.innerHTML = tags.map(t => `
+        <div class="flex items-start justify-between gap-3 bg-white p-2 rounded-lg border border-slate-200/70">
+          <div>
+            <span class="font-bold text-red-600">Tag ${t.tag}</span>
+            <span class="text-slate-400 ml-1">(${tagDescriptions[t.tag] || 'Data Tag'})</span>
+          </div>
+          <div class="text-right break-all max-w-[55%] text-slate-800 font-semibold">${t.val}</div>
+        </div>
+      `).join('');
+    }
+
+    function toggleInspector() {
+      const body = document.getElementById('inspector-body');
+      const chev = document.getElementById('inspector-chevron');
+      body.classList.toggle('hidden');
+      chev.classList.toggle('rotate-180');
+    }
+
+    function copyPayload() {
+      if (!currentFinalPayload) return;
+      navigator.clipboard.writeText(currentFinalPayload);
+      const btn = document.getElementById('copy-btn-text');
+      btn.textContent = 'Tersalin!';
+      setTimeout(() => btn.textContent = 'Salin Payload', 2000);
+    }
+
+    function sharePaymentLink() {
+      if (!currentFinalPayload) return;
+      const url = new URL(window.location.href.split('?')[0]);
+      url.searchParams.set('qris', btoa(currentFinalPayload));
+      navigator.clipboard.writeText(url.toString());
+      const btn = document.getElementById('share-btn-text');
+      btn.textContent = 'Link Disalin!';
+      setTimeout(() => btn.textContent = 'Bagikan Link', 2500);
+    }
+
+    function clearUrlParams() {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      document.getElementById('shared-banner').classList.add('hidden');
+      document.getElementById('raw-qris-input').value = '';
+      document.getElementById('amount-input').value = '';
+      resetPreview();
+    }
+
+    function downloadQRISCard() {
+      if (!currentFinalPayload) return;
+      const qrSource = document.querySelector('#qrcode-preview canvas') || document.querySelector('#qrcode-preview img');
+      if (!qrSource) return;
+
+      const canvas = document.getElementById('export-canvas');
+      const ctx = canvas.getContext('2d');
+
+      // White Background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Top Red Header
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(0, 0, canvas.width, 150);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('STANDAR PEMBAYARAN NASIONAL', 50, 58);
+
+      ctx.font = '800 54px sans-serif';
+      ctx.fillText('QRIS', 50, 118);
+
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(currentIsDynamic ? 'QRIS DINAMIS' : 'QRIS STATIS', canvas.width - 50, 95);
+
+      // Merchant Name & City
+      ctx.fillStyle = '#0f172a';
+      ctx.textAlign = 'center';
+      ctx.font = '800 36px sans-serif';
+      ctx.fillText(currentMerchantName, canvas.width / 2, 235);
+
+      ctx.fillStyle = '#64748b';
+      ctx.font = '600 22px sans-serif';
+      ctx.fillText(`${currentMerchantCity} • NMID: ${currentNMID}`, canvas.width / 2, 275);
+
+      // QR Code Frame
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(175, 320, 450, 450);
+      ctx.drawImage(qrSource, 200, 345, 400, 400);
+
+      // Amount Box
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(100, 810, 600, 120);
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(100, 810, 600, 120);
+
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('TOTAL PEMBAYARAN', canvas.width / 2, 852);
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = '800 38px sans-serif';
+      ctx.fillText(currentDisplayAmount, canvas.width / 2, 902);
+
+      // Footer
+      ctx.fillStyle = '#475569';
+      ctx.font = '600 18px sans-serif';
+      ctx.fillText('Mendukung GoPay • OVO • DANA • ShopeePay • LinkAja • Mobile Banking', canvas.width / 2, 985);
+
+      const link = document.createElement('a');
+      link.download = `QRIS-${currentMerchantName.replace(/\s+/g, '-')}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Load from URL parameter (?qris=...) on startup
+    window.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      const qrisParam = params.get('qris');
+      if (qrisParam) {
+        try {
+          const decoded = atob(qrisParam);
+          document.getElementById('raw-qris-input').value = decoded;
+          const tags = parseTLV(decoded);
+          const amountTag = tags.find(t => t.tag === '54');
+          if (amountTag) {
+            document.getElementById('amount-input').value = parseInt(amountTag.val, 10).toLocaleString('id-ID');
+          }
+          document.getElementById('shared-banner').classList.remove('hidden');
+          generateDynamicQRIS();
+        } catch (e) {
+          console.error('Parameter QRIS tidak valid:', e);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
